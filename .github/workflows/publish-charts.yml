@@ -1,0 +1,45 @@
+on:
+  release:
+    types:
+      - "created"
+  push:
+    tags:
+      - 'v*'
+
+name: Publish Helm Charts
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CR_OWNER: rustrial
+      CR_GIT_REPO: aws-eks-iam-auth-controller
+      CR_PACKAGE_PATH: .cr-release-packages
+      CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Install Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.5.0
+      - name: Install CR
+        run: .github/install-cr.sh
+      - name: Update Helm Chart versions
+        run: |
+          export GIT_TAG="${GITHUB_REF##*/}"
+          export VERSION="${GIT_TAG#v}"
+          sed -i "s/version: 0.0.0/version: ${VERSION}/" charts/rustrial-aws-eks-iam-auth-controller/Chart.yaml;
+          sed -i "s/appVersion: 0.0.0/appVersion: ${VERSION}/" charts/rustrial-aws-eks-iam-auth-controller/Chart.yaml;
+      - name: Package Helm Charts
+        run: /tmp/cr package charts/rustrial-aws-eks-iam-auth-controller
+      - name: Upload Helm Charts
+        run: /tmp/cr upload -c $GITHUB_SHA
+      - name: Update Helm Repository index
+        run: /tmp/cr index -c https://rustrial.github.io/aws-eks-iam-auth-controller --push

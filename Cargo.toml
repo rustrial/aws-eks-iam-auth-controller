@@ -1,0 +1,25 @@
+[package]
+name = "rustrial-aws-eks-iam-auth-controller"
+version = "0.1.0"
+authors = ["alex.berger@nexxiot.com <alex.berger@nexxiot.com>"]
+edition = "2018"
+license = "Unlicense OR MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "^0.4.11"
+env_logger ="^0.8.2"
+anyhow = {version = "1.0.37", features = ["std"]}
+thiserror = "1.0.23"
+kube = { version = "0.47.0", features = ["derive"]}
+kube-runtime = "0.47.0"
+k8s-openapi = { version = "0.10.0", default-features = false, features = ["v1_19"] }
+tokio = { version = "^1.0.1", features = ["full"]}
+schemars = "^0.8.0"
+serde = { version = "^1.0.118", features = ["derive"] }
+serde_json = "^1.0.61"
+serde_yaml = "^0.8.14"
+futures = "0.3.9"
+metrics = "0.12.1"
+metrics-exporter-prometheus = "0.1.0-alpha.13"
