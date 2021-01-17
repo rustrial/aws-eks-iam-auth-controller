@@ -3,12 +3,12 @@ entries:
   rustrial-aws-eks-iam-auth-controller:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2021-01-17T19:34:00.386752068Z"
+    created: "2021-01-17T19:55:28.752479716Z"
     description: Kubernetes operator which consolidates custom resources into `aws-auth` ConfigMap.
-    digest: 26923f5e545f1971a6f97430018ca1cf94e707048e72d0fcc74a29f43510489a
+    digest: a725d6b00dfb313a4ff78adab12116a48565f123df652135416939ef22da5885
     name: rustrial-aws-eks-iam-auth-controller
     type: application
     urls:
     - https://github.com/rustrial/aws-eks-iam-auth-controller/releases/download/rustrial-aws-eks-iam-auth-controller-0.1.2/rustrial-aws-eks-iam-auth-controller-0.1.2.tgz
     version: 0.1.2
-generated: "2021-01-17T19:33:59.953822544Z"
+generated: "2021-01-17T19:55:28.524480064Z"
