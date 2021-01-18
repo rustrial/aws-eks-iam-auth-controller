@@ -1,3 +1,8 @@
+[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/aws-eks-iam-auth-controller)](https://artifacthub.io/packages/search?repo=aws-eks-iam-auth-controller)
+
+![OCI Images](https://github.com/rustrial/aws-eks-iam-auth-controller/workflows/oci-image/badge.svg)
+![Publish Charts](https://github.com/rustrial/aws-eks-iam-auth-controller/workflows/publish-charts/badge.svg)
+
 # AWS EKS iam-auth-controller
 
 [Kubernetes Controller](https://kubernetes.io/docs/concepts/architecture/controller/) tracking
@@ -43,6 +48,22 @@ spec:
   username: kubernetes-admin
   groups:
     - system:masters
+```
+
+## Getting Started
+
+**Add Helm Repository**
+
+_AWS EKS iam-auth-controller_ can be installed via Helm Chart, which by default will use the prebuilt OCI Images for Linux (`amd64` and `arm64`) from [DockerHub](https://hub.docker.com/r/rustrial/aws-eks-iam-auth-controller).
+
+```shell
+helm repo add aws-eks-iam-auth-controller https://rustrial.github.io/aws-eks-iam-auth-controller
+```
+
+**Install Helm Chart**
+
+```shell
+helm install my-rustrial-aws-eks-iam-auth-controller aws-eks-iam-auth-controller/rustrial-aws-eks-iam-auth-controller --version 0.1.0
 ```
 
 ---

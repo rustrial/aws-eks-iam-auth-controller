@@ -931,15 +931,6 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b70227ece8711a1aa2f99655efd795d0cff297a5b9fe39645a93aacf6ad39d"
-dependencies = [
- "metrics-core",
-]
-
-[[package]]
-name = "metrics"
 version = "0.13.0-alpha.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efcf562c6940683fdd0dad97c99a0cef222d3738283d3396a735e8d21190e685"
@@ -949,19 +940,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "metrics-core"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c064b3a1ff41f4bf6c91185c8a0caeccf8a8a27e9d0f92cc54cf3dbec812f48"
-
-[[package]]
 name = "metrics-exporter-prometheus"
 version = "0.1.0-alpha.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "294d98f2b8fc9bdecaad5f4bfc3a60ba64a07338a108b67b573a89552534379f"
 dependencies = [
  "hyper",
- "metrics 0.13.0-alpha.13",
+ "metrics",
  "metrics-util",
  "parking_lot",
  "quanta",
@@ -995,7 +980,7 @@ dependencies = [
  "crossbeam-utils 0.8.1",
  "dashmap 3.11.10",
  "indexmap",
- "metrics 0.13.0-alpha.13",
+ "metrics",
  "parking_lot",
  "quanta",
  "sketches-ddsketch",
@@ -1461,7 +1446,7 @@ dependencies = [
  "kube",
  "kube-runtime",
  "log",
- "metrics 0.12.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "schemars",
  "serde",

@@ -12,7 +12,7 @@ use kube_runtime::{
     reflector::Store,
 };
 use log::info;
-use metrics::{counter, gauge, timing};
+use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -159,7 +159,8 @@ async fn reconcile(
         )
         .await
         .context("Failed to create ConfigMap")?;
-    timing!("reconcile_duration", start, Instant::now());
+    let duration = Instant::now() - start;
+    histogram!("reconcile_duration_ns", duration.as_nanos() as f64);
     Ok(ReconcilerAction {
         requeue_after: Some(Duration::from_secs(10)),
     })
@@ -182,7 +183,7 @@ async fn scheduled_statistics(store: Store<IAMIdentityMapping>) {
     let mut interval = tokio::time::interval(Duration::from_secs(60));
     loop {
         interval.tick().await;
-        gauge!("custom_resource_count", store.state().len() as i64);
+        gauge!("custom_resource_count", store.state().len() as f64);
         trace!("custom_resource_count {}", store.state().len());
     }
 }
@@ -196,8 +197,8 @@ async fn main() -> anyhow::Result<()> {
     let iam_identity_mappings = Api::<IAMIdentityMapping>::all(client.clone());
     let controller = Controller::new(iam_identity_mappings, ListParams::default());
     let store = controller.store();
-    tokio::spawn(scheduled_statistics(store.clone()));
-    controller
+    let schedule = tokio::spawn(scheduled_statistics(store.clone()));
+    let controller = controller
         .run(reconcile, error_policy, Ctx::new(Data { client, store }))
         .for_each(|res| async move {
             match res {
@@ -210,7 +211,10 @@ async fn main() -> anyhow::Result<()> {
                     warn!("reconcile failed: {}", e)
                 }
             }
-        })
-        .await;
+        });
+    tokio::select! {
+       _ = schedule => (),
+       _ = controller => (),
+    };
     Ok(())
 }

@@ -21,3 +21,22 @@ version: 0.0.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 appVersion: 0.0.0
+
+annotations:
+  artifacthub.io/crds: |
+    - kind: IAMIdentityMapping
+      version: v1alpha1
+      name: iamidentitymapping
+      displayName: AWS IAM identity mapping
+      description: Mapping AWS IAM User or Role ARN to Kubernetes username and groups.
+  artifacthub.io/crdsExamples: |
+    - apiVersion: iamauthenticator.k8s.aws/v1alpha1
+      kind: IAMIdentityMapping
+      metadata:
+      name: kubernetes-admin-user
+      spec:
+        arn: arn:aws:iam::XXXXXXXXXXXX:user/KubernetesAdmin
+        username: kubernetes-admin
+        groups:
+        - system:masters
+  artifacthub.io/license: Unlicense OR MIT OR Apache-2.0
