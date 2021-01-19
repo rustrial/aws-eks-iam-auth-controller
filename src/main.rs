@@ -153,7 +153,7 @@ async fn reconcile(
                 patch_strategy: PatchStrategy::Apply,
                 field_manager: Some("aws-eks-iam-auth-controller.rustrial.org".to_string()),
                 dry_run: false,
-                force: false,
+                force: true,
             },
             serde_json::to_vec(&cm).context("Error while serializing ConfigMap")?,
         )
