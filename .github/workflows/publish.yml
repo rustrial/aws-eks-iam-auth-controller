@@ -1,0 +1,150 @@
+name: publish
+
+on:
+  release:
+    types:
+      - "created"
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  publish-oci-images:
+    runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: DockerTag
+        id: docker-tag
+        uses: yuya-takeyama/docker-tag-from-github-ref-action@v1
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+        with:
+          image: tonistiigi/binfmt:latest
+          platforms: all
+      - name: Available platforms
+        run: echo ${{ steps.qemu.outputs.platforms }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            rustrial/aws-eks-iam-auth-controller:${{ steps.docker-tag.outputs.tag }}
+  test-chart:
+    name: install-chart
+    runs-on: ubuntu-latest
+    needs:
+    - publish-oci-images
+    strategy:
+      matrix:
+        k8s:
+          - v1.18.8
+          - v1.19.1
+          - v1.20.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: DockerTag
+        id: docker-tag
+        uses: yuya-takeyama/docker-tag-from-github-ref-action@v1
+      - name: Set up Helm
+        uses: azure/setup-helm@v1.1
+        with:
+          version: v3.5.0
+      - name: Run chart-testing (lint)
+        run: (cd charts/rustrial-aws-eks-iam-auth-controller && helm lint .)
+      - name: Create kind ${{ matrix.k8s }} cluster
+        uses: helm/kind-action@v1.1.0
+        with:
+          node_image: kindest/node:${{ matrix.k8s }}
+      - name: Install chart
+        # No --wait, we do not wait for the Deployment to become ready, as it will not become
+        # ready without valid AWS credentials.
+        run: (cd charts/rustrial-aws-eks-iam-auth-controller && helm install aws-eks-iam-auth-controller . -n kube-system --create-namespace --set fullnameOverride=aws-eks-iam-auth-controller --set-string image.tag=${{ steps.docker-tag.outputs.tag }})
+      - name: Tests
+        run: ./.github/e2e-tests.sh
+  create-release:
+    name: Create Release
+    needs:
+      - publish-oci-images
+      - test-chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: "✏️ Generate release changelog"
+        id: generate-release-changelog
+        uses: heinrichreimer/github-changelog-generator-action@v2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          #onlyLastTag: "true"
+          #stripHeaders: "true"
+          #stripGeneratorNotice: "true"
+      - name: Set TAG_NAME
+        run: echo "TAG_NAME=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: "🚀 Create GitHub release"
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: ${{ steps.generate-release-changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+  publish-chart:
+    needs:
+      - publish-oci-images
+      - test-chart
+      - create-release
+    runs-on: ubuntu-latest
+    env:
+      CR_OWNER: rustrial
+      CR_GIT_REPO: aws-eks-iam-auth-controller
+      CR_PACKAGE_PATH: .cr-release-packages
+      CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Install Helm
+        uses: azure/setup-helm@v1.1
+        with:
+          version: v3.5.0
+      - name: Install CR
+        run: .github/install-cr.sh
+      - name: Update Helm Chart versions
+        run: |
+          export GIT_TAG="${GITHUB_REF##*/}"
+          export VERSION="${GIT_TAG#v}"
+          sed -i "s/version: 0.0.0/version: ${VERSION}/" charts/rustrial-aws-eks-iam-auth-controller/Chart.yaml;
+          sed -i "s/appVersion: 0.0.0/appVersion: ${VERSION}/" charts/rustrial-aws-eks-iam-auth-controller/Chart.yaml;
+      - name: Package Helm Charts
+        run: /tmp/cr package charts/rustrial-aws-eks-iam-auth-controller
+      - name: Upload Helm Charts
+        run: /tmp/cr upload -c $GITHUB_SHA
+      - name: Update Helm Repository index
+        run: /tmp/cr index -c https://rustrial.github.io/aws-eks-iam-auth-controller --push

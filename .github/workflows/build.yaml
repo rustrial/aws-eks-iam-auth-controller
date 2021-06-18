@@ -1,0 +1,46 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+      - name: Format source
+        run: "cargo +stable fmt"
+      - name: Check if working tree is dirty
+        run: |
+          if [[ $(git diff --stat) != '' ]]; then
+            git --no-pager diff
+            echo 'run make test and commit changes'
+            exit 1
+          fi
+      - name: Unit Tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+      - name: Setup Kubernetes
+        uses: engineerd/setup-kind@v0.5.0
+      - name: Setup Helm
+        uses: fluxcd/pkg/actions/helm@main
+      - name: Setup Kubectl
+        uses: fluxcd/pkg/actions/kubectl@main
+      - name: Install from local image
+        run: ./.github/install.sh
+      - name: Run e2e tests
+        run: ./.github/e2e-tests.sh
