@@ -4,7 +4,7 @@ use anyhow::Context;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
 use kube::{
-    api::{ListParams, PatchParams, PatchStrategy},
+    api::{ListParams, Patch, PatchParams},
     Api, Client, CustomResource,
 };
 use kube_runtime::{
@@ -85,7 +85,6 @@ async fn reconcile(
 
     let (roles, users) = cm
         .map(|v| v.data)
-        .flatten()
         .map(|d| {
             (
                 d.get("mapRoles")
@@ -142,7 +141,7 @@ async fn reconcile(
             namespace: Some(KUBE_SYSTEM.to_string()),
             ..ObjectMeta::default()
         },
-        data: Some(contents),
+        data: contents,
         ..Default::default()
     };
     info!("ConfigMap changeset: {:?}", cm);
@@ -150,12 +149,11 @@ async fn reconcile(
         .patch(
             AWS_AUTH,
             &PatchParams {
-                patch_strategy: PatchStrategy::Apply,
                 field_manager: Some("aws-eks-iam-auth-controller.rustrial.org".to_string()),
                 dry_run: false,
                 force: true,
             },
-            serde_json::to_vec(&cm).context("Error while serializing ConfigMap")?,
+            &Patch::Apply(cm),
         )
         .await
         .context("Failed to create ConfigMap")?;
