@@ -85,6 +85,7 @@ async fn reconcile(
 
     let (roles, users) = cm
         .map(|v| v.data)
+        .flatten()
         .map(|d| {
             (
                 d.get("mapRoles")
@@ -141,7 +142,7 @@ async fn reconcile(
             namespace: Some(KUBE_SYSTEM.to_string()),
             ..ObjectMeta::default()
         },
-        data: contents,
+        data: Some(contents),
         ..Default::default()
     };
     info!("ConfigMap changeset: {:?}", cm);
