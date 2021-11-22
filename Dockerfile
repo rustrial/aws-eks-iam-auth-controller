@@ -18,7 +18,8 @@ ENV RUSTFLAGS="-C target-feature=-crt-static"
 
 RUN cargo build --release
 
-FROM alpine:$ALPINE_VERSION
+
+FROM alpine:$ALPINE_VERSION as staging
 
 # Needed for RUSTFLAGS="-C target-feature=-crt-static" as above
 RUN apk --no-cache add libgcc
@@ -27,7 +28,20 @@ RUN apk --no-cache add libgcc
 # which is called /lib/ld-musl-aarch64.so.1 on alpine.
 RUN ( [[ $(uname -m) == "aarch64" ]] && ln -s /lib/ld-musl-aarch64.so.1 /lib/ld-linux-aarch64.so.1 ) || true
 
+# Now build effective runtime image from scratch to reduce attack surface
+FROM scratch
+
 COPY --from=builder /workdir/target/release/rustrial-aws-eks-iam-auth-controller /usr/local/bin/rustrial-aws-eks-iam-auth-controller
+
+COPY --from=staging /lib/ld* /lib/
+
+COPY --from=staging /lib/lib* /lib/
+
+COPY --from=staging /usr/lib/libgcc* /usr/lib/
+
+COPY --from=builder /usr/share/ca-certificates /usr/share/ca-certificates
+
+COPY --from=builder /etc/ssl /etc/ssl
 
 ENTRYPOINT [ "/usr/local/bin/rustrial-aws-eks-iam-auth-controller" ]
 
