@@ -29,6 +29,16 @@ podSecurityContext:
   {}
   # fsGroup: 2000
 
+env:
+  - name: RUST_LOG
+    value: debug
+  # In case you are using an IPv6 cluster, you might need to to explicitly set KUBERNETES_SERVICE_HOST
+  # like shown below to work around a bug in kube-rs.
+  #
+  #- name: KUBERNETES_SERVICE_HOST
+  #  value: kubernetes.default.svc
+
+
 securityContext:
   capabilities:
     drop:
