@@ -63,7 +63,7 @@ jobs:
         id: docker-tag
         uses: yuya-takeyama/docker-tag-from-github-ref-action@v1
       - name: Set up Helm
-        uses: azure/setup-helm@v1.1
+        uses: azure/setup-helm@v2.0
         with:
           version: v3.5.0
       - name: Run chart-testing (lint)
@@ -131,7 +131,7 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       - name: Install Helm
-        uses: azure/setup-helm@v1.1
+        uses: azure/setup-helm@v2.0
         with:
           version: v3.5.0
       - name: Install CR
