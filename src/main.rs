@@ -8,7 +8,7 @@ use kube::{
     Api, Client, CustomResource,
 };
 use kube_runtime::{
-    controller::{Context as Ctx, Controller, ReconcilerAction},
+    controller::{Action, Context as Ctx, Controller},
     reflector::Store,
 };
 use log::info;
@@ -16,7 +16,7 @@ use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, time::Instant};
+use std::{collections::BTreeMap, sync::Arc, time::Instant};
 use tokio::time::Duration;
 
 const AWS_AUTH: &str = "aws-auth";
@@ -71,10 +71,7 @@ struct MapUser {
 }
 
 /// Controller triggers this whenever our main object or our children changed
-async fn reconcile(
-    mapping: IAMIdentityMapping,
-    ctx: Ctx<Data>,
-) -> Result<ReconcilerAction, CrdError> {
+async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<Action, CrdError> {
     let start = Instant::now();
     info!("reconile {:?}", mapping);
     let client = ctx.get_ref().client.clone();
@@ -102,28 +99,28 @@ async fn reconcile(
     let mut users: Vec<MapUser> =
         serde_yaml::from_str(users.as_str()).context("Error while deserializing mapUsers")?;
 
-    let state: Vec<IAMIdentityMapping> = ctx.get_ref().store.clone().state();
+    let state: Vec<Arc<IAMIdentityMapping>> = ctx.get_ref().store.clone().state();
     // Remove all ConfitMap entries, which have no corresponding CustomResource.
     roles.retain(|r| state.iter().find(|v| r.rolearn == v.spec.arn).is_some());
     users.retain(|r| state.iter().find(|v| r.username == v.spec.arn).is_some());
     // Upsert (add/update) ConfigMap entries for CustomerResources.
     for item in state {
-        let spec: IAMIdentityMappingSpec = item.spec;
+        let spec: &IAMIdentityMappingSpec = &item.spec;
         if spec.arn.contains(":role/") {
             // optionally, remove already existing ConfigMap entry.
             roles.retain(|r| r.rolearn != spec.arn);
             roles.push(MapRole {
-                rolearn: spec.arn,
-                username: spec.username,
-                groups: spec.groups,
+                rolearn: spec.arn.clone(),
+                username: spec.username.clone(),
+                groups: spec.groups.clone(),
             });
         } else {
             // optionally, remove already existing ConfigMap entry.
             users.retain(|r| r.userarn != spec.arn);
             users.push(MapUser {
-                userarn: spec.arn,
-                username: spec.username,
-                groups: spec.groups,
+                userarn: spec.arn.clone(),
+                username: spec.username.clone(),
+                groups: spec.groups.clone(),
             });
         }
     }
@@ -160,16 +157,12 @@ async fn reconcile(
         .context("Failed to create ConfigMap")?;
     let duration = Instant::now() - start;
     histogram!("reconcile_duration_ns", duration.as_nanos() as f64);
-    Ok(ReconcilerAction {
-        requeue_after: Some(Duration::from_secs(10)),
-    })
+    Ok(Action::requeue(Duration::from_secs(900)))
 }
 
 /// The controller triggers this on reconcile errors
-fn error_policy(_error: &CrdError, _ctx: Ctx<Data>) -> ReconcilerAction {
-    ReconcilerAction {
-        requeue_after: Some(Duration::from_secs(10)),
-    }
+fn error_policy(_error: &CrdError, _ctx: Ctx<Data>) -> Action {
+    Action::requeue(Duration::from_secs(10))
 }
 
 // Data we want access to in error/reconcile calls
