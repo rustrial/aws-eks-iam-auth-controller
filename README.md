@@ -66,6 +66,40 @@ helm repo add aws-eks-iam-auth-controller https://rustrial.github.io/aws-eks-iam
 helm install my-rustrial-aws-eks-iam-auth-controller aws-eks-iam-auth-controller/rustrial-aws-eks-iam-auth-controller --version 0.1.0
 ```
 
+### Adding default IAMIdentityMapping objects for EKS Nodes
+
+As it is implemented today, the controller does only reconcile `IAMIdentityMapping` objects, and will overwrite (remove) all entries in `aws-auth` which have no corresponding `IAMIdentityMapping` object.
+To enable your EKS worker nodes respectively Fargate nodes to join your cluster, you have to deploy 
+the corresponding `IAMIdentityMapping` objects like this:
+
+```yaml
+kubectl apply -f- <<EOF
+---
+apiVersion: iamauthenticator.k8s.aws/v1alpha1
+kind: IAMIdentityMapping
+metadata:
+  name: aws-ec2-nodes
+spec:
+  arn: 'arn:aws:iam::999999999999:role/your-ec2-node-role-name-here'
+  groups:
+    - 'system:bootstrappers'
+    - 'system:nodes'
+  username: 'system:node:{{EC2PrivateDNSName}}'
+---
+apiVersion: iamauthenticator.k8s.aws/v1alpha1
+kind: IAMIdentityMapping
+metadata:
+  name: aws-fargate-nodes
+spec:
+  arn: 'arn:aws:iam::999999999999:role/your-fargate-node-role-name-here'
+  groups:
+    - 'system:bootstrappers'
+    - 'system:nodes'
+    - 'system:node-proxier'
+  username: 'system:node:{{SessionName}}'
+EOF
+```
+
 ---
 
 ## License
