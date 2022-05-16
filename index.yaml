@@ -20,6 +20,35 @@ entries:
             - system:masters
       artifacthub.io/license: Unlicense OR MIT OR Apache-2.0
     apiVersion: v2
+    appVersion: 0.1.7
+    created: "2022-05-16T11:56:49.480550211Z"
+    description: Kubernetes operator which consolidates custom resources into `aws-auth`
+      ConfigMap.
+    digest: 10165efeb377015f020453c84f67cc23b21cfa55655809d6ee8a0e2c0ee42979
+    name: rustrial-aws-eks-iam-auth-controller
+    type: application
+    urls:
+    - https://github.com/rustrial/aws-eks-iam-auth-controller/releases/download/rustrial-aws-eks-iam-auth-controller-0.1.7/rustrial-aws-eks-iam-auth-controller-0.1.7.tgz
+    version: 0.1.7
+  - annotations:
+      artifacthub.io/crds: |
+        - kind: IAMIdentityMapping
+          version: v1alpha1
+          name: iamidentitymapping
+          displayName: AWS IAM identity mapping
+          description: Mapping AWS IAM User or Role ARN to Kubernetes username and groups.
+      artifacthub.io/crdsExamples: |
+        - apiVersion: iamauthenticator.k8s.aws/v1alpha1
+          kind: IAMIdentityMapping
+          metadata:
+          name: kubernetes-admin-user
+          spec:
+            arn: arn:aws:iam::XXXXXXXXXXXX:user/KubernetesAdmin
+            username: kubernetes-admin
+            groups:
+            - system:masters
+      artifacthub.io/license: Unlicense OR MIT OR Apache-2.0
+    apiVersion: v2
     appVersion: 0.1.6
     created: "2022-01-19T11:58:16.310985478Z"
     description: Kubernetes operator which consolidates custom resources into `aws-auth`
@@ -186,4 +215,4 @@ entries:
     urls:
     - https://github.com/rustrial/aws-eks-iam-auth-controller/releases/download/rustrial-aws-eks-iam-auth-controller-0.1.0/rustrial-aws-eks-iam-auth-controller-0.1.0.tgz
     version: 0.1.0
-generated: "2022-01-19T11:58:16.311311618Z"
+generated: "2022-05-16T11:56:49.480585812Z"
