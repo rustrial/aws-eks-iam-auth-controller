@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+
 use anyhow::Context;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
@@ -11,17 +12,33 @@ use kube_runtime::{
     controller::{Action, Context as Ctx, Controller},
     reflector::Store,
 };
+use hyper::{Client as HyperClient, body::Buf};
 use log::info;
 use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc, time::Instant};
-use tokio::time::Duration;
+use serde::{Deserialize, Serialize, Deserializer};
+use std::{
+    fmt,
+    collections::BTreeMap,
+    collections::HashMap,
+    sync::Arc,
+    time::Instant,
+};
+use tokio::{
+    time::Duration,
+    time::timeout,
+    sync::OnceCell,
+};
+use regex::Regex;
 
 const AWS_AUTH: &str = "aws-auth";
 
 const KUBE_SYSTEM: &str = "kube-system";
+
+const INSTANCE_METADATA_ENDPOINT: &str = "http://169.254.169.254/latest/dynamic/instance-identity/document";
+
+static INSTANCE_METADATA: OnceCell<HashMap<String, String>> = OnceCell::const_new();
 
 #[derive(thiserror::Error, Debug)]
 enum CrdError {
@@ -32,6 +49,64 @@ enum CrdError {
 impl From<anyhow::Error> for CrdError {
     fn from(e: anyhow::Error) -> Self {
         CrdError::Any(format!("{}", e))
+    }
+}
+
+pub struct Template {
+    src: String,
+    matches: Vec<(usize, usize)>,
+}
+
+impl Template {
+    pub fn new(template: &str) -> Self {
+        let regex = Regex::new(r"\{\{([^}]*)\}\}").unwrap();
+
+        Template {
+            src: template.to_owned(),
+            matches: regex
+                .find_iter(template)
+                .map(|m| (m.start(), m.end()))
+                .collect(),
+        }
+    }
+
+    pub fn render(&self, vals: &HashMap<String, String>) -> String {
+        let mut parts: Vec<&str> = vec![];
+        let template_str = &self.src;
+
+        let first = match self.matches.first() {
+            Some((start, _)) => *start,
+            _ => return template_str.clone(),
+        };
+
+        if first > 0 {
+            parts.push(&template_str[0..first])
+        }
+
+        let mut prev_end: Option<usize> = None;
+
+        for (start, end) in self.matches.iter() {
+            if let Some(last_end) = prev_end {
+                parts.push(&template_str[last_end..*start])
+            }
+            let arg = &template_str[*start..*end];
+            let arg_name = &arg[2..arg.len() - 2];
+            match vals.get(arg_name) {
+                Some(s) => parts.push(s),
+                _ => parts.push(arg),
+            }
+
+            prev_end = Some(*end);
+        }
+
+        let template_len = template_str.len();
+        if let Some(last_pos) = prev_end {
+            if last_pos < template_len {
+                parts.push(&template_str[last_pos..template_len])
+            }
+        }
+
+        parts.join("")
     }
 }
 
@@ -56,18 +131,59 @@ struct IAMIdentityMappingStatus {
     status: String,
 }
 
+#[derive(Serialize, Debug, PartialEq, Clone)]
+struct ARN(String);
+
+impl fmt::Display for ARN {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for ARN {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        let template = Template::new(s);
+        Ok(ARN(template.render(&INSTANCE_METADATA.get().unwrap())))
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 struct MapRole {
-    pub rolearn: String,
     pub username: String,
     pub groups: Option<Vec<String>>,
+    pub rolearn: ARN,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 struct MapUser {
-    pub userarn: String,
     pub username: String,
     pub groups: Option<Vec<String>>,
+    pub userarn: ARN,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct InstanceMetadata {
+    pub account_id: String,
+}
+
+impl InstanceMetadata {
+    async fn get_metadata() -> Result<InstanceMetadata, Box<dyn std::error::Error>> {
+        let client = HyperClient::new();
+        let url = INSTANCE_METADATA_ENDPOINT.parse::<hyper::Uri>()?;
+        let response = client.get(url).await?;
+        let body = hyper::body::aggregate(response).await?;
+        Ok(serde_json::from_reader(body.reader())?)
+    }
+
+    pub fn get(&self) -> HashMap<String, String> {
+        let metadata_str = serde_json::to_string(self).unwrap();
+        serde_json::from_str(metadata_str.as_str()).unwrap()
+    }
 }
 
 /// Controller triggers this whenever our main object or our children changed
@@ -101,24 +217,24 @@ async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<A
 
     let state: Vec<Arc<IAMIdentityMapping>> = ctx.get_ref().store.clone().state();
     // Remove all ConfitMap entries, which have no corresponding CustomResource.
-    roles.retain(|r| state.iter().find(|v| r.rolearn == v.spec.arn).is_some());
-    users.retain(|r| state.iter().find(|v| r.username == v.spec.arn).is_some());
+    roles.retain(|r| state.iter().find(|v| r.rolearn.to_string() == v.spec.arn).is_some());
+    users.retain(|r| state.iter().find(|v| r.userarn.to_string() == v.spec.arn).is_some());
     // Upsert (add/update) ConfigMap entries for CustomerResources.
     for item in state {
         let spec: &IAMIdentityMappingSpec = &item.spec;
         if spec.arn.contains(":role/") {
             // optionally, remove already existing ConfigMap entry.
-            roles.retain(|r| r.rolearn != spec.arn);
+            roles.retain(|r| r.rolearn.to_string() != spec.arn);
             roles.push(MapRole {
-                rolearn: spec.arn.clone(),
+                rolearn: ARN(spec.arn.clone()),
                 username: spec.username.clone(),
                 groups: spec.groups.clone(),
             });
         } else {
             // optionally, remove already existing ConfigMap entry.
-            users.retain(|r| r.userarn != spec.arn);
+            users.retain(|r| r.userarn.to_string() != spec.arn);
             users.push(MapUser {
-                userarn: spec.arn.clone(),
+                userarn: ARN(spec.arn.clone()),
                 username: spec.username.clone(),
                 groups: spec.groups.clone(),
             });
@@ -183,6 +299,17 @@ async fn scheduled_statistics(store: Store<IAMIdentityMapping>) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+    let metadata: InstanceMetadata = match timeout(Duration::from_secs(5), InstanceMetadata::get_metadata()).await {
+        Ok(to) => to.unwrap_or_else(|err| {
+            warn!("Failed to get metadata: {:?}", err);
+            Default::default()
+        }),
+        Err(_) => {
+            warn!("Failed to get metadata within timeout. Setting with default values!");
+            Default::default()
+        }
+    };
+    INSTANCE_METADATA.set(metadata.get()).unwrap();
     let metrics_builder = PrometheusBuilder::new();
     metrics_builder.install()?;
     let client = Client::try_default().await?;
@@ -191,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
     let store = controller.store();
     let schedule = tokio::spawn(scheduled_statistics(store.clone()));
     let controller = controller
-        .run(reconcile, error_policy, Ctx::new(Data { client, store }))
+        .run(reconcile, error_policy, Ctx::new(Data {client, store}))
         .for_each(|res| async move {
             match res {
                 Ok(o) => {

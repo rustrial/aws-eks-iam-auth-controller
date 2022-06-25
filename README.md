@@ -34,7 +34,7 @@ kind: IAMIdentityMapping
 metadata:
   name: kubernetes-admin-user
 spec:
-  arn: arn:aws:iam::XXXXXXXXXXXX:user/KubernetesAdmin
+  arn: arn:aws:iam::{{ accountId }}:user/KubernetesAdmin
   username: kubernetes-admin
   groups:
     - system:masters
