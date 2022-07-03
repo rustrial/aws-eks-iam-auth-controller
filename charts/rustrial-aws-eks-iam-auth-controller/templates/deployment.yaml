@@ -18,7 +18,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "rustrial-aws-eks-iam-auth-controller.selectorLabels" . | nindent 8 }}
+        {{- include "rustrial-aws-eks-iam-auth-controller.podLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

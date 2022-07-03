@@ -51,6 +51,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Pod labels
+*/}}
+{{- define "rustrial-aws-eks-iam-auth-controller.podLabels" -}}
+{{ include "rustrial-aws-eks-iam-auth-controller.selectorLabels" . }}
+{{- if .Values.podLabels }}
+{{ .Values.podLabels | toYaml }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "rustrial-aws-eks-iam-auth-controller.serviceAccountName" -}}
