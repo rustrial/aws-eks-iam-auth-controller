@@ -20,6 +20,9 @@ spec:
       labels:
         {{- include "rustrial-aws-eks-iam-auth-controller.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
