@@ -16,7 +16,7 @@ kube-runtime = "0.72.0"
 k8s-openapi = { version = "0.14.0", default-features = false, features = [
     "v1_23",
 ] }
-tokio = { version = "1.18.4", features = ["full"] }
+tokio = { version = "1.18.5", features = ["full"] }
 schemars = "0.8.8"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
