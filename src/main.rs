@@ -4,12 +4,13 @@ use anyhow::Context;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
 use kube::{
-    api::{ListParams, Patch, PatchParams},
+    api::{Patch, PatchParams, ValidationDirective},
     Api, Client, CustomResource,
 };
 use kube_runtime::{
-    controller::{Action, Context as Ctx, Controller},
+    controller::{Action, Controller},
     reflector::Store,
+    watcher::Config,
 };
 use log::info;
 use metrics::{counter, gauge, histogram};
@@ -71,10 +72,10 @@ struct MapUser {
 }
 
 /// Controller triggers this whenever our main object or our children changed
-async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<Action, CrdError> {
+async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Arc<Data>) -> Result<Action, CrdError> {
     let start = Instant::now();
     info!("reconile {:?}", mapping);
-    let client = ctx.get_ref().client.clone();
+    let client = ctx.as_ref().client.clone();
     let cm_api = Api::<ConfigMap>::namespaced(client.clone(), KUBE_SYSTEM);
     let cm = cm_api.get(AWS_AUTH).await;
     info!("Got existing ConfigMap: {:?}", cm);
@@ -99,7 +100,7 @@ async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<A
     let mut users: Vec<MapUser> =
         serde_yaml::from_str(users.as_str()).context("Error while deserializing mapUsers")?;
 
-    let state: Vec<Arc<IAMIdentityMapping>> = ctx.get_ref().store.clone().state();
+    let state: Vec<Arc<IAMIdentityMapping>> = ctx.as_ref().store.clone().state();
     // Remove all ConfitMap entries, which have no corresponding CustomResource.
     roles.retain(|r| state.iter().find(|v| r.rolearn == v.spec.arn).is_some());
     users.retain(|r| state.iter().find(|v| r.username == v.spec.arn).is_some());
@@ -150,6 +151,7 @@ async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<A
                 field_manager: Some("aws-eks-iam-auth-controller.rustrial.org".to_string()),
                 dry_run: false,
                 force: true,
+                field_validation: Some(ValidationDirective::Ignore),
             },
             &Patch::Apply(cm),
         )
@@ -161,7 +163,7 @@ async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Ctx<Data>) -> Result<A
 }
 
 /// The controller triggers this on reconcile errors
-fn error_policy(_error: &CrdError, _ctx: Ctx<Data>) -> Action {
+fn error_policy(_object: Arc<IAMIdentityMapping>, _error: &CrdError, _ctx: Arc<Data>) -> Action {
     Action::requeue(Duration::from_secs(10))
 }
 
@@ -187,11 +189,11 @@ async fn main() -> anyhow::Result<()> {
     metrics_builder.install()?;
     let client = Client::try_default().await?;
     let iam_identity_mappings = Api::<IAMIdentityMapping>::all(client.clone());
-    let controller = Controller::new(iam_identity_mappings, ListParams::default());
+    let controller = Controller::new(iam_identity_mappings, Config::default());
     let store = controller.store();
     let schedule = tokio::spawn(scheduled_statistics(store.clone()));
     let controller = controller
-        .run(reconcile, error_policy, Ctx::new(Data { client, store }))
+        .run(reconcile, error_policy, Arc::new(Data { client, store }))
         .for_each(|res| async move {
             match res {
                 Ok(o) => {
