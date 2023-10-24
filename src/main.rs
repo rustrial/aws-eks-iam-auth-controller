@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate log;
 use anyhow::Context;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
@@ -12,13 +10,15 @@ use kube_runtime::{
     reflector::Store,
     watcher::Config,
 };
-use log::info;
 use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc, time::Instant};
+use std::{collections::BTreeMap, env, sync::Arc, time::Instant};
 use tokio::time::Duration;
+use tracing::log;
+use tracing_subscriber;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 const AWS_AUTH: &str = "aws-auth";
 
@@ -74,11 +74,11 @@ struct MapUser {
 /// Controller triggers this whenever our main object or our children changed
 async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Arc<Data>) -> Result<Action, CrdError> {
     let start = Instant::now();
-    info!("reconile {:?}", mapping);
+    log::info!("reconile {:?}", mapping);
     let client = ctx.as_ref().client.clone();
     let cm_api = Api::<ConfigMap>::namespaced(client.clone(), KUBE_SYSTEM);
     let cm = cm_api.get(AWS_AUTH).await;
-    info!("Got existing ConfigMap: {:?}", cm);
+    log::info!("Got existing ConfigMap: {:?}", cm);
     let cm = cm.ok();
 
     let (roles, users) = cm
@@ -143,7 +143,7 @@ async fn reconcile(mapping: Arc<IAMIdentityMapping>, ctx: Arc<Data>) -> Result<A
         data: Some(contents),
         ..Default::default()
     };
-    info!("ConfigMap changeset: {:?}", cm);
+    log::info!("ConfigMap changeset: {:?}", cm);
     cm_api
         .patch(
             AWS_AUTH,
@@ -178,13 +178,25 @@ async fn scheduled_statistics(store: Store<IAMIdentityMapping>) {
     loop {
         interval.tick().await;
         gauge!("custom_resource_count", store.state().len() as f64);
-        trace!("custom_resource_count {}", store.state().len());
+        log::trace!("custom_resource_count {}", store.state().len());
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    let log_format_env = env::var("LOG_FORMAT")
+        .unwrap_or("plain".to_string())
+        .trim()
+        .to_lowercase();
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()?;
+    let builder = tracing_subscriber::fmt().with_env_filter(filter);
+    if log_format_env == "json" {
+        builder.json().init();
+    } else {
+        builder.init();
+    };
     let metrics_builder = PrometheusBuilder::new();
     metrics_builder.install()?;
     let client = Client::try_default().await?;
@@ -198,11 +210,11 @@ async fn main() -> anyhow::Result<()> {
             match res {
                 Ok(o) => {
                     counter!("reconcile_success", 1);
-                    info!("reconciled {:?}", o)
+                    log::info!("reconciled {:?}", o)
                 }
                 Err(e) => {
                     counter!("reconcile_failure", 1);
-                    warn!("reconcile failed: {}", e)
+                    log::warn!("reconcile failed: {}", e)
                 }
             }
         });
