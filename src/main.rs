@@ -1,9 +1,3 @@
-use tracing::log;
-use tracing_subscriber;
-use tracing_subscriber::filter::{
-    EnvFilter,
-    LevelFilter,
-};
 use anyhow::Context;
 use futures::StreamExt;
 use k8s_openapi::{api::core::v1::ConfigMap, apimachinery::pkg::apis::meta::v1::ObjectMeta};
@@ -20,8 +14,11 @@ use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{env, collections::BTreeMap, sync::Arc, time::Instant};
+use std::{collections::BTreeMap, env, sync::Arc, time::Instant};
 use tokio::time::Duration;
+use tracing::log;
+use tracing_subscriber;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 const AWS_AUTH: &str = "aws-auth";
 
@@ -194,8 +191,7 @@ async fn main() -> anyhow::Result<()> {
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env()?;
-    let builder = tracing_subscriber::fmt()
-        .with_env_filter(filter);
+    let builder = tracing_subscriber::fmt().with_env_filter(filter);
     if log_format_env == "json" {
         builder.json().init();
     } else {
