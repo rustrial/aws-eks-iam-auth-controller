@@ -1,0 +1,14 @@
+{{- if .Values.defaultIdentity.enabled }}
+apiVersion: iamauthenticator.k8s.aws/v1alpha1
+kind: IAMIdentityMapping
+metadata:
+  name: aws-ec2-nodes
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  arn: {{ .Values.defaultIdentity.roleArn | quote }}
+  username: system:node:{{ .Values.ec2Node.privateDNSName }}
+  groups:
+    - system:bootstrappers
+    - system:nodes
+{{- end }}
