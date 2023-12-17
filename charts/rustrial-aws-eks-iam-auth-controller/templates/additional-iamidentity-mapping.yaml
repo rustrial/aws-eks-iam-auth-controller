@@ -3,8 +3,6 @@ apiVersion: iamauthenticator.k8s.aws/v1alpha1
 kind: IAMIdentityMapping
 metadata:
   name: {{ .name }}
-  annotations:
-    "helm.sh/hook": post-install
 spec:
   arn: {{ .arn | quote }}
   username: {{ .username | quote }}
