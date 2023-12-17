@@ -16,7 +16,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: DockerTag
         id: docker-tag
         uses: yuya-takeyama/docker-tag-from-github-ref-action@v1
@@ -60,7 +60,7 @@ jobs:
           - v1.27.3
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: DockerTag
         id: docker-tag
         uses: yuya-takeyama/docker-tag-from-github-ref-action@v1
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: "✏️ Generate release changelog"
@@ -125,7 +125,7 @@ jobs:
       CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Configure Git
