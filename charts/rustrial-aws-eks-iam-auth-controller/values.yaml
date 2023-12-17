@@ -68,15 +68,11 @@ affinity: {}
 
 topologySpreadConstraints: {}
 
-defaultIdentity:
-  enabled: false
-  roleArn: "arn:aws:iam::123456789012:role/example-role"
-
-additionalIdentities: {}
-  # - name: "example-identity-1"
+additionalIdentities: []
+  # - name: "aws-ec2-nodes"
   #   arn: "arn:aws:iam::123456789012:user/example-user-1"
-  #   username: "custom-username-1"
-  #   groups: ["group-1", "group-2"]
+  #   username: "system:node:{{EC2PrivateDNSName}}"
+  #   groups: ["system:bootstrappers", "system:nodes"]
   # - name: "example-identity-2"
   #   arn: "arn:aws:iam::123456789012:user/example-user-2"
   #   username: "custom-username-2"
