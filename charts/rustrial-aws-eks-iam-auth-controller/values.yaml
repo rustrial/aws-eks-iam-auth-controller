@@ -67,3 +67,13 @@ tolerations: []
 affinity: {}
 
 topologySpreadConstraints: {}
+
+additionalIdentities: []
+  # - name: "aws-ec2-nodes"
+  #   arn: "arn:aws:iam::123456789012:user/example-user-1"
+  #   username: "system:node:{{EC2PrivateDNSName}}"
+  #   groups: ["system:bootstrappers", "system:nodes"]
+  # - name: "example-identity-2"
+  #   arn: "arn:aws:iam::123456789012:user/example-user-2"
+  #   username: "custom-username-2"
+  #   groups: ["group-3", "group-4"]
