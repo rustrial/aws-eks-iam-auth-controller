@@ -1,3 +1,9 @@
+> [!WARNING]  
+> This project is archived as EKS now offers a viable alternative with [Access Entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html) and we no longer intend to maintain this controller.
+> If you still need it, please feel free to fork this repository.
+
+----
+
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/aws-eks-iam-auth-controller)](https://artifacthub.io/packages/search?repo=aws-eks-iam-auth-controller)
 
 ![OCI Images](https://github.com/rustrial/aws-eks-iam-auth-controller/workflows/oci-image/badge.svg)
